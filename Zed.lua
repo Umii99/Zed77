@@ -1,9 +1,12 @@
 -- =========================================================================
 -- ZEDHUB - GROW A GARDEN (FULL FEATURED CUSTOM UI SCRIPT)
 -- =========================================================================
-local CoreGui = game:GetService("CoreGui")
-if CoreGui:FindFirstChild("ZedHubCustomUI") then
-    CoreGui.ZedHubCustomUI:Destroy()
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+if PlayerGui:FindFirstChild("ZedHubCustomUI") then
+    PlayerGui.ZedHubCustomUI:Destroy()
 end
 
 -- CONFIGURATION & STATE
@@ -33,7 +36,7 @@ getgenv().ZedHubConfig = {
 -- ================= GUI BUILDER =================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "ZedHubCustomUI"
-ScreenGui.Parent = CoreGui
+ScreenGui.Parent = PlayerGui
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 -- Main Hub Window
@@ -160,19 +163,74 @@ CloseBtn.MouseButton1Click:Connect(function() ExitModal.Visible = true end)
 YesBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
 NoBtn.MouseButton1Click:Connect(function() ExitModal.Visible = false end)
 
+-- ================= MENU CONTENT CONTAINER =================
+local ContentContainer = Instance.new("ScrollingFrame")
+ContentContainer.Parent = MainFrame
+ContentContainer.BackgroundTransparency = 1
+ContentContainer.Position = UDim2.new(0, 12, 0, 48)
+ContentContainer.Size = UDim2.new(1, -24, 1, -60)
+ContentContainer.CanvasSize = UDim2.new(0, 0, 0, 300)
+ContentContainer.ScrollBarThickness = 4
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Parent = ContentContainer
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 8)
+
+local function CreateToggle(name, defaultState, callback)
+    local ToggleBtn = Instance.new("TextButton")
+    ToggleBtn.Parent = ContentContainer
+    ToggleBtn.BackgroundColor3 = Color3.fromRGB(30, 41, 59)
+    ToggleBtn.Size = UDim2.new(1, 0, 0, 36)
+    ToggleBtn.Font = Enum.Font.GothamBold
+    ToggleBtn.Text = name .. ": " .. (defaultState and "ON" else "OFF")
+    ToggleBtn.TextColor3 = defaultState and Color3.fromRGB(74, 222, 128) or Color3.fromRGB(248, 113, 113)
+    ToggleBtn.TextSize, ToggleBtn.TextXAlignment = 12, Enum.TextXAlignment.Left
+    
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 6)
+    Corner.Parent = ToggleBtn
+    
+    local Padding = Instance.new("UIPadding")
+    Padding.PaddingLeft = UDim.new(0, 12)
+    Padding.Parent = ToggleBtn
+
+    local state = defaultState
+    ToggleBtn.MouseButton1Click:Connect(function()
+        state = not state
+        ToggleBtn.Text = name .. ": " .. (state and "ON" else "OFF")
+        ToggleBtn.TextColor3 = state and Color3.fromRGB(74, 222, 128) or Color3.fromRGB(248, 113, 113)
+        callback(state)
+    end)
+end
+
+CreateToggle("Auto Collect Fall/Bloom", getgenv().ZedHubConfig.AutoCollect, function(val)
+    getgenv().ZedHubConfig.AutoCollect = val
+end)
+
+CreateToggle("Auto Submit Fall Plant", getgenv().ZedHubConfig.AutoSubmitFallBloom, function(val)
+    getgenv().ZedHubConfig.AutoSubmitFallBloom = val
+end)
+
+CreateToggle("Shady Scarecrow Give Seed", getgenv().ZedHubConfig.GiveASeed, function(val)
+    getgenv().ZedHubConfig.GiveASeed = val
+end)
+
+CreateToggle("Auto Sell Backpack / Fruit", getgenv().ZedHubConfig.AutoSellBackpack, function(val)
+    getgenv().ZedHubConfig.AutoSellBackpack = val
+    getgenv().ZedHubConfig.AutoSellFruit = val
+end)
+
 -- ================= BACKEND AUTOMATION ENGINE =================
 local Workspace = game:GetService("Workspace")
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
-local PlayerGui = LocalPlayer:FindFirstChild("PlayerGui")
+local PlayerGuiRef = LocalPlayer:FindFirstChild("PlayerGui")
 local GameEvents = ReplicatedStorage:FindFirstChild("GameEvents")
 
 local isProcessingScarecrow = false
 local IsSelling = false
 
--- Presisi Auto Sell (Kasir)
 local function PreciseSellInventory()
     if IsSelling then return end
     IsSelling = true
@@ -201,7 +259,6 @@ local function PreciseSellInventory()
     IsSelling = false
 end
 
--- Loop Auto Sell Backpack/Fruit
 task.spawn(function()
     while task.wait(3) do
         local backpackOn = getgenv().ZedHubConfig.AutoSellBackpack
@@ -221,8 +278,8 @@ task.spawn(function()
 end)
 
 local function GetEventRequiredItemName()
-    if not PlayerGui then return nil end
-    for _, gui in pairs(PlayerGui:GetChildren()) do
+    if not PlayerGuiRef then return nil end
+    for _, gui in pairs(PlayerGuiRef:GetChildren()) do
         if gui.Name:lower():find("event") or gui.Name:lower():find("fall") or gui.Name:lower():find("bloom") then
             for _, desc in pairs(gui:GetDescendants()) do
                 if desc:IsA("TextLabel") and (desc.Text:lower():find("need") or desc.Text:lower():find("require") or desc.Text:lower():find("/")) then
@@ -234,7 +291,6 @@ local function GetEventRequiredItemName()
     return nil
 end
 
--- Auto Collect Required Plant
 task.spawn(function()
     while task.wait(2) do
         if getgenv().ZedHubConfig.AutoCollect then
@@ -261,7 +317,6 @@ task.spawn(function()
     end
 end)
 
--- Auto Submit Plant
 task.spawn(function()
     while task.wait(3) do
         if getgenv().ZedHubConfig.AutoSubmitFallBloom then
@@ -281,7 +336,6 @@ task.spawn(function()
     end
 end)
 
--- Shady Scarecrow Logic
 local function EquipSpecificSeed(mode)
     local character = LocalPlayer.Character
     local backpack = LocalPlayer.Backpack
